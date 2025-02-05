@@ -84,30 +84,33 @@ class Tester(object):
 
         self.build_model()
 
-    def test(self):
-        transform = transformer(True, True, True, False, self.imsize) 
-        test_paths = make_dataset(self.test_image_path)
-        make_folder(self.test_label_path, '')
-        make_folder(self.test_color_label_path, '') 
-        self.G.load_state_dict(torch.load(os.path.join(self.model_save_path, self.model_name)))
-        self.G.eval() 
-        batch_num = int(self.test_size / self.batch_size)
+    def test(self, image: torch.Tensor):
+        # 2) [C, H, W] 形式の場合、バッチ次元 [1, C, H, W] を追加
+        if image.ndim == 3:  # 画像が [C, H, W] の場合
+            img_tensor = image.unsqueeze(0)
+        elif image.ndim == 4:  # 既に [N, C, H, W] の場合はそのまま
+            img_tensor = image
+        else:
+            raise ValueError(f"Unexpected input shape: {image.shape}")
 
-        for i in range(batch_num):
-            print (i)
-            imgs = []
-            for j in range(self.batch_size):
-                path = test_paths[i * self.batch_size + j]
-                img = transform(Image.open(path))
-                imgs.append(img)
-            imgs = torch.stack(imgs) 
-            imgs = imgs.cuda()
-            labels_predict = self.G(imgs)
-            labels_predict_plain = generate_label_plain(labels_predict, self.imsize)
-            labels_predict_color = generate_label(labels_predict, self.imsize)
-            for k in range(self.batch_size):
-                cv2.imwrite(os.path.join(self.test_label_path, str(i * self.batch_size + k) +'.png'), labels_predict_plain[k])
-                save_image(labels_predict_color[k], os.path.join(self.test_color_label_path, str(i * self.batch_size + k) +'.png'))
+        # 3) GPU に送る
+        img_tensor = img_tensor.cuda()
+
+        # 4) 推論
+        self.G.eval()
+        labels_predict = self.G(img_tensor)
+
+        # 5) セグメンテーション結果（plain, color）の生成
+        labels_predict_plain = generate_label_plain(labels_predict, self.imsize)
+        labels_predict_color = generate_label(labels_predict, self.imsize)
+
+        # 6) 保存
+        cv2.imwrite(os.path.join(self.test_label_path, 'predict.png'),
+                labels_predict_plain[0])
+        save_image(labels_predict_color[0],
+               os.path.join(self.test_color_label_path, 'predict_color.png'))
+
+        print("Single-image test done.")
 
     def build_model(self):
         self.G = unet().cuda()

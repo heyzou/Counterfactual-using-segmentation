@@ -47,8 +47,9 @@ def adv_attack(g_model: GenerativeModel,
     if attack_style == "z":
         
         # add segmentation code
+        config = get_parameters()
         tester = Tester(config)
-        tester.test()
+        tester.test(x)
         
         # define z as params for derivative wrt to z
         z = g_model.encode(x)
