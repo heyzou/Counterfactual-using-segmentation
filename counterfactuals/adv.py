@@ -13,7 +13,9 @@ from counterfactuals.plot import plot_grid_part
 from counterfactuals.generative_models.base import GenerativeModel
 from counterfactuals.classifiers.base import NeuralNet
 
+# add segmentation dir
 from segmentation.tester import Tester
+from segmentation.parameter import *
 
 Tensor = TypeVar('torch.tensor')
 
