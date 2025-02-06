@@ -87,6 +87,13 @@ class Tester(object):
         self.build_model()
 
     def test(self, image: torch.Tensor):
+        # 1) `image` の情報を確認
+        print("=== Input Image Debugging ===")
+        print(f"Type: {type(image)}")   # 型を確認
+        print(f"Shape: {image.shape}")  # 形状を確認
+        print(f"Dtype: {image.dtype}")  # データ型を確認
+        print(f"Min: {image.min().item()}, Max: {image.max().item()}")  # 値の範囲を確認
+        print("============================")
         # 2) [C, H, W] 形式の場合、バッチ次元 [1, C, H, W] を追加
         if image.ndim == 3:  # 画像が [C, H, W] の場合
             img_tensor = image.unsqueeze(0)
@@ -102,6 +109,10 @@ class Tester(object):
         self.G.eval()
         labels_predict = self.G(img_tensor)
 
+        print(f"labels_predict shape: {labels_predict.shape}")
+        print(f"labels_predict min: {labels_predict.min().item()}, max: {labels_predict.max().item()}")
+        print(f"labels_predict unique values: {torch.unique(labels_predict)}")
+
         # 5) セグメンテーション結果（plain, color）の生成
         labels_predict_plain = generate_label_plain(labels_predict, self.imsize)
         labels_predict_color = generate_label(labels_predict, self.imsize)
@@ -115,9 +126,35 @@ class Tester(object):
         print("Single-image test done.")
 
     def build_model(self):
+        """ モデルを構築し、学習済み重みをロードする """
+
+        # 🔹 モデルを初期化
         self.G = unet().cuda()
         if self.parallel:
             self.G = nn.DataParallel(self.G)
 
-        # print networks
-        print(self.G)
+        print("== モデル構造 ==")
+        print(self.G)  # モデル構造を出力
+
+        # 🔹 学習済みモデルをロード
+        model_path = "segmentation/models/parsenet/model.pth"
+
+        print(f"Loading model weights from: {model_path}")
+
+        try:
+            checkpoint = torch.load(model_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
+
+            # 🔹 チェックポイントの内容を確認
+            if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+                self.G.load_state_dict(checkpoint["model_state_dict"], strict=False)
+            else:
+                self.G.load_state_dict(checkpoint, strict=False)
+
+            print("✅ モデルのロード成功")
+        except Exception as e:
+            print(f"❌ モデルのロードに失敗しました: {e}")
+    
+        # 🔹 学習済みの重みが適用されているか確認
+        for name, param in self.G.named_parameters():
+            print(f"{name}: {param.mean().item()}")  # 平均値を表示
+            break  # 1つのパラメータのみ確認すればOK
