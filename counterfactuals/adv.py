@@ -128,6 +128,14 @@ def run_adv_attack(x: Tensor,
 
     config = get_parameters()
     tester = Tester(config)
+    
+    # 画像更新前のセグメンテーション確率分布を保存
+    if attack_style == "z":
+        x_org = g_model.decode(z).detach()  # 更新前の画像
+    else:
+        x_org = x.clone().detach()
+
+    prob_before = tester.get_segmentation_prob(x_org)  # 確率分布を取得
 
     with tqdm(total=num_steps) as progress_bar:
         for step in range(num_steps):
@@ -136,9 +144,15 @@ def run_adv_attack(x: Tensor,
             if attack_style == "z":
                 x = g_model.decode(z)
                 
-                # add segmentation code
-                tester.test(x,step)
+                # # add segmentation code
+                # tester.test(x,step)
 
+            # 画像更新後のセグメンテーション確率分布を取得
+            prob_after = tester.get_segmentation_prob(x)
+
+            # クロスエントロピーの計算
+            cross_entropy = -(prob_after * torch.log(prob_before + 1e-8)).sum(dim=1).mean()
+            
             # assert that x is a valid image
             x.data = torch.clip(x.data, min=0.0, max=1.0)
 
@@ -164,8 +178,11 @@ def run_adv_attack(x: Tensor,
                 # early stopping
                 if acc > save_at:
                     return x
+            
+            # 損失にクロスエントロピーを加える（必要に応じて重み付け可能）
+            total_loss = loss + 0.1 * cross_entropy  # 0.1 はクロスエントロピーの影響を調整する係数
 
-            loss.backward()
+            total_loss.backward()
             optimizer.step()
 
     return None

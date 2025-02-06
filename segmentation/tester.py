@@ -154,3 +154,13 @@ class Tester(object):
         for name, param in self.G.named_parameters():
             print(f"{name}: {param.mean().item()}")  # 平均値を表示
             break  # 1つのパラメータのみ確認すればOK
+
+    def get_segmentation_prob(self, image: torch.Tensor):
+        """
+        画像に対してセグメンテーションを適用し、各クラスの確率分布を返す
+        """
+        self.G.eval()
+        with torch.no_grad():
+            logits = self.G(image.cuda())  # [N, C, H, W]
+            probs = torch.nn.functional.softmax(logits, dim=1)  # 確率分布に変換
+        return probs
