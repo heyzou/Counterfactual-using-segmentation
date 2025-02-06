@@ -1,2 +1,3 @@
 # Ignore checkpoint directory
 checkpoints/
+test_color_visualize/

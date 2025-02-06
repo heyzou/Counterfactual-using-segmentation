@@ -46,11 +46,6 @@ def adv_attack(g_model: GenerativeModel,
     params = []
     if attack_style == "z":
         
-        # add segmentation code
-        config = get_parameters()
-        tester = Tester(config)
-        tester.test(x)
-        
         # define z as params for derivative wrt to z
         z = g_model.encode(x)
         z = [z_i.detach() for z_i in z] if isinstance(z, list) else z.detach()
@@ -131,12 +126,18 @@ def run_adv_attack(x: Tensor,
     softmax = torch.nn.Softmax(dim=1)
     loss_fn = nn.CrossEntropyLoss()
 
+    config = get_parameters()
+    tester = Tester(config)
+
     with tqdm(total=num_steps) as progress_bar:
         for step in range(num_steps):
             optimizer.zero_grad()
 
             if attack_style == "z":
                 x = g_model.decode(z)
+                
+                # add segmentation code
+                tester.test(x,step)
 
             # assert that x is a valid image
             x.data = torch.clip(x.data, min=0.0, max=1.0)

@@ -86,26 +86,20 @@ class Tester(object):
 
         self.build_model()
 
-    def test(self, image: torch.Tensor):
-        # 1) `image` の情報を確認
+    def test(self, image: torch.Tensor, step: int = None):
+        # 画像情報のデバッグ
         print("=== Input Image Debugging ===")
         print(f"Type: {type(image)}")   # 型を確認
         print(f"Shape: {image.shape}")  # 形状を確認
         print(f"Dtype: {image.dtype}")  # データ型を確認
         print(f"Min: {image.min().item()}, Max: {image.max().item()}")  # 値の範囲を確認
         print("============================")
-        # 2) [C, H, W] 形式の場合、バッチ次元 [1, C, H, W] を追加
-        if image.ndim == 3:  # 画像が [C, H, W] の場合
-            img_tensor = image.unsqueeze(0)
-        elif image.ndim == 4:  # 既に [N, C, H, W] の場合はそのまま
-            img_tensor = image
-        else:
-            raise ValueError(f"Unexpected input shape: {image.shape}")
 
-        # 3) GPU に送る
+        # [C, H, W] の場合、バッチ次元を追加
+        img_tensor = image.unsqueeze(0) if image.ndim == 3 else image
         img_tensor = img_tensor.cuda()
 
-        # 4) 推論
+        # 推論
         self.G.eval()
         labels_predict = self.G(img_tensor)
 
@@ -113,17 +107,19 @@ class Tester(object):
         print(f"labels_predict min: {labels_predict.min().item()}, max: {labels_predict.max().item()}")
         print(f"labels_predict unique values: {torch.unique(labels_predict)}")
 
-        # 5) セグメンテーション結果（plain, color）の生成
+        # セグメンテーション結果の生成
         labels_predict_plain = generate_label_plain(labels_predict, self.imsize)
         labels_predict_color = generate_label(labels_predict, self.imsize)
 
-        # 6) 保存
-        cv2.imwrite(os.path.join(self.test_label_path, 'predict.png'),
+        # 🔹 保存時のファイル名変更
+        step_suffix = f"_step_{step}" if step is not None else ""
+    
+        cv2.imwrite(os.path.join(self.test_label_path, f'predict{step_suffix}.png'),
                 labels_predict_plain[0])
         save_image(labels_predict_color[0],
-               os.path.join(self.test_color_label_path, 'predict_color.png'))
+               os.path.join(self.test_color_label_path, f'predict_color{step_suffix}.png'))
 
-        print("Single-image test done.")
+        print(f"Single-image test done. Saved as predict{step_suffix}.png")
 
     def build_model(self):
         """ モデルを構築し、学習済み重みをロードする """
