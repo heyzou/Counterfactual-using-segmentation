@@ -145,7 +145,7 @@ def run_adv_attack(x: Tensor,
                 x = g_model.decode(z)
                 
                 # # add segmentation code
-                # tester.test(x,step)
+                tester.test(x,step)
 
             # 画像更新後のセグメンテーション確率分布を取得
             prob_after = tester.get_segmentation_prob(x)
@@ -161,7 +161,14 @@ def run_adv_attack(x: Tensor,
                 # minimize negative regression to maximize regression
                 loss = -regression if maximize else regression
 
-                progress_bar.set_postfix(regression=regression.item(), loss=loss.item(), step=step + 1)
+                total_loss = loss + 0.1 * cross_entropy  # 0.1 はクロスエントロピーの影響を調整する係数
+            
+                progress_bar.set_postfix(
+                    regression=regression.item(),
+                    loss=loss.item(),
+                    cross_entropy=cross_entropy.item(),
+                    step=step + 1
+                )
                 progress_bar.update()
 
                 if (maximize and regression.item() > save_at) or (not maximize and regression.item() < save_at):
@@ -172,17 +179,24 @@ def run_adv_attack(x: Tensor,
                 acc = softmax(prediction)[torch.arange(0, x.shape[0]), target]
                 loss = loss_fn(prediction, target)
 
-                progress_bar.set_postfix(acc_target=acc.item(), loss=loss.item(), step=step + 1)
+                total_loss = loss + 0.6 * cross_entropy  # 0.1 はクロスエントロピーの影響を調整する係数
+
+                progress_bar.set_postfix(
+                    acc_target=acc.item(),
+                    loss=loss.item(),
+                    cross_entropy=cross_entropy.item(),
+                    step=step + 1
+                )
                 progress_bar.update()
 
                 # early stopping
                 if acc > save_at:
                     return x
-            
-            # 損失にクロスエントロピーを加える（必要に応じて重み付け可能）
-            total_loss = loss + 0.1 * cross_entropy  # 0.1 はクロスエントロピーの影響を調整する係数
 
             total_loss.backward()
             optimizer.step()
+        
+    # 🔹 最後に GIF を保存
+    tester.save_gif()
 
     return None

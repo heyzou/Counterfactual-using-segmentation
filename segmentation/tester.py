@@ -3,6 +3,7 @@ import time
 import torch
 import datetime
 import numpy as np
+import imageio
 
 import torch.nn as nn
 from torch.autograd import Variable
@@ -84,17 +85,16 @@ class Tester(object):
         self.test_size = config.test_size
         self.model_name = config.model_name
 
+        # GIF 画像を保存するディレクトリ
+        self.gif_save_path = "./results/gif"
+        os.makedirs(self.gif_save_path, exist_ok=True)
+
+        # セグメンテーション画像を保存するリスト
+        self.segmented_images = []
+        
         self.build_model()
 
     def test(self, image: torch.Tensor, step: int = None):
-        # 画像情報のデバッグ
-        print("=== Input Image Debugging ===")
-        print(f"Type: {type(image)}")   # 型を確認
-        print(f"Shape: {image.shape}")  # 形状を確認
-        print(f"Dtype: {image.dtype}")  # データ型を確認
-        print(f"Min: {image.min().item()}, Max: {image.max().item()}")  # 値の範囲を確認
-        print("============================")
-
         # [C, H, W] の場合、バッチ次元を追加
         img_tensor = image.unsqueeze(0) if image.ndim == 3 else image
         img_tensor = img_tensor.cuda()
@@ -102,10 +102,6 @@ class Tester(object):
         # 推論
         self.G.eval()
         labels_predict = self.G(img_tensor)
-
-        print(f"labels_predict shape: {labels_predict.shape}")
-        print(f"labels_predict min: {labels_predict.min().item()}, max: {labels_predict.max().item()}")
-        print(f"labels_predict unique values: {torch.unique(labels_predict)}")
 
         # セグメンテーション結果の生成
         labels_predict_plain = generate_label_plain(labels_predict, self.imsize)
@@ -118,6 +114,10 @@ class Tester(object):
                 labels_predict_plain[0])
         save_image(labels_predict_color[0],
                os.path.join(self.test_color_label_path, f'predict_color{step_suffix}.png'))
+
+        # 🔹 GIF 用に画像を保存
+        self.segmented_images.append(labels_predict_color[0].cpu().permute(1, 2, 0).numpy())
+
 
         print(f"Single-image test done. Saved as predict{step_suffix}.png")
 
@@ -164,3 +164,9 @@ class Tester(object):
             logits = self.G(image.cuda())  # [N, C, H, W]
             probs = torch.nn.functional.softmax(logits, dim=1)  # 確率分布に変換
         return probs
+    
+    def save_gif(self):
+        """保存したセグメンテーション画像から GIF を作成"""
+        gif_path = os.path.join(self.gif_save_path, "segmentation_animation.gif")
+        imageio.mimsave(gif_path, self.segmented_images, duration=0.2)
+        print(f"GIF saved at: {gif_path}")
