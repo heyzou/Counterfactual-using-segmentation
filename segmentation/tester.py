@@ -12,8 +12,10 @@ from torchvision import transforms
 import cv2
 import PIL
 from unet import unet
-from utils import *
 from PIL import Image
+
+
+from .utils import *
 
 def transformer(resize, totensor, normalize, centercrop, imsize):
     options = []
@@ -48,7 +50,7 @@ class Tester(object):
         self.model = config.model
 
         # Model hyper-parameters
-        self.imsize = config.imsize
+        # self.imsize = config.imsize
         self.parallel = config.parallel
 
         self.total_step = config.total_step

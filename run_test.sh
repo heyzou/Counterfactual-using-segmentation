@@ -8,5 +8,4 @@ python main.py main \
              --target_class 1 \
              --lr 5e-3 \
              --num_steps 1000 \
-             --save_at 0.99 \
-             --train false
+             --save_at 0.99
