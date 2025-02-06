@@ -50,7 +50,7 @@ class Tester(object):
         self.model = config.model
 
         # Model hyper-parameters
-        # self.imsize = config.imsize
+        self.imsize = config.imsize
         self.parallel = config.parallel
 
         # self.total_step = config.total_step
