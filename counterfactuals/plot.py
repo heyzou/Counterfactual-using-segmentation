@@ -15,7 +15,7 @@ from matplotlib import pyplot as plt
 
 from matplotlib import rc
 
-rc('text', usetex=True)
+rc('text', usetex=False)
 plt.rc('font', family='serif')
 
 plt.rcParams.update({'font.size': 30})
