@@ -53,29 +53,29 @@ class Tester(object):
         # self.imsize = config.imsize
         self.parallel = config.parallel
 
-        self.total_step = config.total_step
-        self.batch_size = config.batch_size
-        self.num_workers = config.num_workers
-        self.g_lr = config.g_lr
-        self.lr_decay = config.lr_decay
-        self.beta1 = config.beta1
-        self.beta2 = config.beta2
+        # self.total_step = config.total_step
+        # self.batch_size = config.batch_size
+        # self.num_workers = config.num_workers
+        # self.g_lr = config.g_lr
+        # self.lr_decay = config.lr_decay
+        # self.beta1 = config.beta1
+        # self.beta2 = config.beta2
         self.pretrained_model = config.pretrained_model
 
         self.img_path = config.img_path
-        self.label_path = config.label_path 
+        # self.label_path = config.label_path 
         self.log_path = config.log_path
-        self.model_save_path = config.model_save_path
+        # self.model_save_path = config.model_save_path
         self.sample_path = config.sample_path
         self.log_step = config.log_step
         self.sample_step = config.sample_step
-        self.model_save_step = config.model_save_step
+        # self.model_save_step = config.model_save_step
         self.version = config.version
 
         # Path
         self.log_path = os.path.join(config.log_path, self.version)
         self.sample_path = os.path.join(config.sample_path, self.version)
-        self.model_save_path = os.path.join(config.model_save_path, self.version)
+        # self.model_save_path = os.path.join(config.model_save_path, self.version)
         self.test_label_path = config.test_label_path
         self.test_color_label_path = config.test_color_label_path
         self.test_image_path = config.test_image_path
