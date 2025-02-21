@@ -118,7 +118,6 @@ class Tester(object):
         # 🔹 GIF 用に画像を保存
         self.segmented_images.append(labels_predict_color[0].cpu().permute(1, 2, 0).numpy())
 
-
         print(f"Single-image test done. Saved as predict{step_suffix}.png")
 
     def build_model(self):
@@ -160,13 +159,17 @@ class Tester(object):
         画像に対してセグメンテーションを適用し、各クラスの確率分布を返す
         """
         self.G.eval()
-        with torch.no_grad():
-            logits = self.G(image.cuda())  # [N, C, H, W]
-            probs = torch.nn.functional.softmax(logits, dim=1)  # 確率分布に変換
+        # with torch.no_grad():
+        logits = self.G(image.cuda())  # [N, C, H, W]
+        probs = torch.nn.functional.softmax(logits, dim=1)  # 確率分布に変換
         return probs
-    
+
     def save_gif(self):
         """保存したセグメンテーション画像から GIF を作成"""
         gif_path = os.path.join(self.gif_save_path, "segmentation_animation.gif")
-        imageio.mimsave(gif_path, self.segmented_images, duration=0.2)
+
+        # 🔹 画像を uint8 に変換
+        segmented_images_uint8 = [(img * 255).astype(np.uint8) for img in self.segmented_images]
+
+        imageio.mimsave(gif_path, segmented_images_uint8, duration=0.2)
         print(f"GIF saved at: {gif_path}")

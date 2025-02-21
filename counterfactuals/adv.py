@@ -3,6 +3,8 @@ from PIL import Image
 from matplotlib import pyplot as plt
 import matplotlib
 from typing import TypeVar, Dict
+import numpy as np
+import os
 
 import torch
 import torch.nn as nn
@@ -105,7 +107,6 @@ def adv_attack(g_model: GenerativeModel,
     g_model_name = f"_{type(g_model).__name__}" if g_model is not None else ""
     plt.savefig(result_dir + f'overview_{image_name}_{attack_style}{g_model_name}_save_at_{save_at}.png')
 
-
 def run_adv_attack(x: Tensor,
                    z: Tensor,
                    optimizer: Optimizer,
@@ -135,69 +136,107 @@ def run_adv_attack(x: Tensor,
     else:
         x_org = x.clone().detach()
 
-    prob_before = tester.get_segmentation_prob(x_org)  # 確率分布を取得
+    # prob_before = tester.get_segmentation_prob(x_org)  # 確率分布を取得
+    prob_before = tester.get_segmentation_prob(x).detach()  # 勾配を切る
+    # tester.test(x, 0)
 
-    with tqdm(total=num_steps) as progress_bar:
-        for step in range(num_steps):
-            optimizer.zero_grad()
+    # セグメンテーションロスの比重を変化させるリスト
+    weight_factors = np.arange(5.0, 5.1, 0.1)
 
-            if attack_style == "z":
-                x = g_model.decode(z)
-                
-                # # add segmentation code
-                tester.test(x,step)
+    # 結果を格納する辞書
+    loss_results = {}
 
-            # 画像更新後のセグメンテーション確率分布を取得
-            prob_after = tester.get_segmentation_prob(x)
+    for weight in weight_factors:
+        print(f"\n🔹 Running attack with segmentation weight {weight:.1f}")
 
-            # クロスエントロピーの計算
-            cross_entropy = -(prob_after * torch.log(prob_before + 1e-8)).sum(dim=1).mean()
-            
-            # assert that x is a valid image
-            x.data = torch.clip(x.data, min=0.0, max=1.0)
+        steps = []
+        total_loss_list = []
+        cross_entropy_loss_list = []
+        classifier_loss_list = []
 
-            if "UNet" in type(classifier).__name__:
-                _, regression = classifier(x)
-                # minimize negative regression to maximize regression
-                loss = -regression if maximize else regression
+        with tqdm(total=num_steps, desc=f"Weight {weight:.1f}") as progress_bar:
+            for step in range(num_steps):
+                optimizer.zero_grad()
 
-                total_loss = loss + 0.1 * cross_entropy  # 0.1 はクロスエントロピーの影響を調整する係数
-            
+                if attack_style == "z":
+                    x = g_model.decode(z)
+                    tester.test(x, step)
+
+                # 画像更新後のセグメンテーション確率分布を取得
+                prob_after = tester.get_segmentation_prob(x)
+
+                # クロスエントロピーの計算
+                cross_entropy = -(prob_after * torch.log(prob_before + 1e-8)).sum(dim=1).mean()
+
+                # 画像の値を [0,1] に制限
+                x = torch.clamp(x, min=0.0, max=1.0)
+
+                if "UNet" in type(classifier).__name__:
+                    _, regression = classifier(x)
+                    loss = -regression if maximize else regression
+                else:
+                    prediction = classifier(x)
+                    acc = softmax(prediction)[torch.arange(0, x.shape[0]), target]
+                    loss = loss_fn(prediction, target)
+
+                # セグメンテーションロスの影響を変更
+                total_loss = 0.3 * loss + weight * cross_entropy
+
+                # 🔹 ロスの履歴を記録
+                steps.append(step)
+                total_loss_list.append(total_loss.item())
+                cross_entropy_loss_list.append(cross_entropy.item())
+                classifier_loss_list.append(loss.item())
+
                 progress_bar.set_postfix(
-                    regression=regression.item(),
-                    loss=loss.item(),
-                    cross_entropy=cross_entropy.item(),
-                    step=step + 1
-                )
-                progress_bar.update()
-
-                if (maximize and regression.item() > save_at) or (not maximize and regression.item() < save_at):
-                    return x
-
-            else:
-                prediction = classifier(x)
-                acc = softmax(prediction)[torch.arange(0, x.shape[0]), target]
-                loss = loss_fn(prediction, target)
-
-                total_loss = loss + 1.0 * cross_entropy  # 0.1 はクロスエントロピーの影響を調整する係数
-
-                progress_bar.set_postfix(
-                    acc_target=acc.item(),
-                    loss=loss.item(),
                     total_loss=total_loss.item(),
                     cross_entropy=cross_entropy.item(),
-                    step=step + 1
+                    classifier_loss=loss.item(),
+                    step=step + 1,
+                    acc= acc.item()
                 )
                 progress_bar.update()
 
-                # early stopping
-                if acc > save_at:
+                # 早期停止
+                if "UNet" not in type(classifier).__name__ and acc > save_at:
+                    print(f"✅ Early stopping at step {step} for weight {weight:.1f}")
                     return x
 
-            total_loss.backward()
-            optimizer.step()
-        
-    # 🔹 最後に GIF を保存
-    tester.save_gif()
+                total_loss.backward()
+                optimizer.step()
+
+        # 🔹 各 weight の結果を保存
+        loss_results[weight] = {
+            "steps": np.array(steps),
+            "total_loss": np.array(total_loss_list),
+            "cross_entropy": np.array(cross_entropy_loss_list),
+            "classifier_loss": np.array(classifier_loss_list)
+        }
+
+        print(f"Total Loss List (Weight {weight:.1f}): {total_loss_list}")
+        # 🔹 各 weight ごとの詳細なグラフを保存
+        plt.figure(figsize=(10, 5))
+        plt.plot(steps, total_loss_list, label="Total Loss", linestyle='-', color='blue')
+        plt.plot(steps, cross_entropy_loss_list, label="Segmentation Loss", linestyle='--', color='red')
+        plt.plot(steps, classifier_loss_list, label="Counterfactual Loss", linestyle='-.', color='green')
+        plt.xlabel("Steps")
+        plt.ylabel("Loss")
+        plt.legend()
+        plt.title(f"Loss Trends (Weight = {weight:.1f})")
+        os.makedirs("./results/", exist_ok=True)
+        plt.savefig(f"./results/loss_plot_weight_{weight:.1f}.png")
+        plt.close()
+
+    # 🔹 すべての比重の影響を比較するグラフ
+    plt.figure(figsize=(12, 6))
+    for weight, data in loss_results.items():
+        plt.plot(data["steps"], data["total_loss"], label=f"Weight {weight:.1f}")
+
+    plt.xlabel("Steps")
+    plt.ylabel("Total Loss")
+    plt.legend()
+    plt.title("Impact of Segmentation Loss Weight on Total Loss")
+    plt.savefig("./results/loss_weight_impact.png")
+    plt.close()
 
     return None
